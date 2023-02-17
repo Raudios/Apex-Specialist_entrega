@@ -1,0 +1,7 @@
+global with sharing class WarehouseSyncSchedule implements Schedulable{
+    // Define el método execute, que se encargará de ejecutar la lógica
+    global void execute(SchedulableContext ctx){
+        // Crea un nuevo trabajo en segundo plano utilizando el servicio de llamada a WarehouseCalloutService
+        System.enqueueJob(new WarehouseCalloutService());
+    }
+}

@@ -1,0 +1,82 @@
+public with sharing class MaintenanceRequestHelper {
+    // Método estático para actualizar los Work Orders
+    public static void updateWorkOrders(List<Case> updWorkOrders, Map<Id,Case> nonUpdCaseMap) {
+        // Se crea un conjunto para almacenar los Ids de los casos válidos
+        Set<Id> validIds = new Set<Id>();
+        
+        // Se recorre la lista de casos actualizados
+        for (Case c : updWorkOrders){
+            // Se verifica que el caso ha sido cerrado y no se encontraba cerrado anteriormente
+            if (nonUpdCaseMap.get(c.Id).Status != 'Closed' && c.Status == 'Closed'){
+                // Se verifica que el tipo de caso sea "Repair" o "Routine Maintenance"
+                if (c.Type == 'Repair' || c.Type == 'Routine Maintenance'){
+                    // Se agrega el Id del caso al conjunto de casos válidos
+                    validIds.add(c.Id);
+                }
+            }
+        }
+        
+        // Si el conjunto de casos válidos no está vacío
+        if (!validIds.isEmpty()){
+            // Se crea una lista de casos nuevos
+            List<Case> newCases = new List<Case>();
+            
+            // Se crea un mapa de casos cerrados
+            Map<Id,Case> closedCasesM = new Map<Id,Case>([
+                SELECT Id, Vehicle__c, Equipment__c, Equipment__r.Maintenance_Cycle__c, 
+                    (SELECT Id,Equipment__c,Quantity__c FROM Equipment_Maintenance_Items__r) 
+                FROM Case WHERE Id IN :validIds]);
+            
+            // Se crea un mapa de ciclos de mantenimiento
+            Map<Id,Decimal> maintenanceCycles = new Map<ID,Decimal>();
+            
+            // Se obtiene el ciclo de mantenimiento más corto para cada caso
+            AggregateResult[] results = [SELECT Maintenance_Request__c, MIN(Equipment__r.Maintenance_Cycle__c) cycle 
+                FROM Equipment_Maintenance_Item__c WHERE Maintenance_Request__c IN :validIds GROUP BY Maintenance_Request__c];
+            for (AggregateResult ar : results){ 
+                maintenanceCycles.put((Id) ar.get('Maintenance_Request__c'), (Decimal) ar.get('cycle'));
+            }
+            
+            // Se crea un caso nuevo para cada caso cerrado
+            for(Case cc : closedCasesM.values()){
+                // Se crea un nuevo caso
+                Case nc = new Case (
+                    ParentId = cc.Id,
+                    Status = 'New',
+                    Subject = 'Routine Maintenance',
+                    Type = 'Routine Maintenance',
+                    Vehicle__c = cc.Vehicle__c,
+                    Equipment__c =cc.Equipment__c,
+                    Origin = 'Web',
+                    Date_Reported__c = Date.Today()
+                );
+                
+                // Se establece la fecha de vencimiento
+                if (maintenanceCycles.containsKey(cc.Id)){
+                    nc.Date_Due__c = Date.today().addDays((Integer) maintenanceCycles.get(cc.Id));
+                } else {
+                    nc.Date_Due__c = Date.today().addDays((Integer) cc.Equipment__r.maintenance_Cycle__c);
+                }
+                
+                // Se agrega el caso a la lista de casos nuevos
+                newCases.add(nc);
+            }
+            
+            // Se insertan los casos nuevos
+            insert newCases;
+
+            // Se clonan los registros Equipment_Maintenance_Item__c relacionados a los casos nuevos
+            List<Equipment_Maintenance_Item__c> clonedWPs = new List<Equipment_Maintenance_Item__c>();
+            for (Case nc : newCases) {
+                for (Equipment_Maintenance_Item__c wp : closedCasesM.get(nc.ParentId).Equipment_Maintenance_Items__r) {
+                    Equipment_Maintenance_Item__c wpClone = wp.clone();
+                    wpClone.Maintenance_Request__c = nc.Id;
+                    clonedWPs.add(wpClone);
+                }
+            }
+            insert clonedWPs;
+        }
+    }
+}
+
+

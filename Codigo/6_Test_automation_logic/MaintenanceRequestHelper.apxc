@@ -1,0 +1,74 @@
+public with sharing class MaintenanceRequestHelper {
+    public static void updateworkOrders(List<Case> updWorkOrders, Map<Id,Case> nonUpdCaseMap) {
+        // Creamos un conjunto de identificadores para los casos que se actualizarán
+        Set<Id> validIds = new Set<Id>();
+        
+        // Iteramos por los casos que se actualizarán para comprobar que cumplan las condiciones necesarias
+        For (Case c : updWorkOrders){
+            if (nonUpdCaseMap.get(c.Id).Status != 'Closed' && c.Status == 'Closed'){
+                if (c.Type == 'Repair' || c.Type == 'Routine Maintenance'){
+                    validIds.add(c.Id);
+                }
+            }
+        }
+        
+        // Si se encontraron casos válidos, procedemos a crear nuevos casos de mantenimiento
+        if (!validIds.isEmpty()){
+            // Creamos una lista vacía para almacenar los nuevos casos de mantenimiento
+            List<Case> newCases = new List<Case>();
+            // Creamos un mapa para almacenar los casos cerrados que necesitan mantenimiento
+            Map<Id,Case> closedCasesM = new Map<Id,Case>([SELECT Id, Vehicle__c, Equipment__c, Equipment__r.Maintenance_Cycle__c,(SELECT Id,Equipment__c,Quantity__c FROM Equipment_Maintenance_Items__r) 
+                                                         FROM Case WHERE Id IN :validIds]);
+            // Creamos un mapa para almacenar el ciclo de mantenimiento mínimo para cada caso
+            Map<Id,Decimal> maintenanceCycles = new Map<ID,Decimal>();
+            // Ejecutamos una consulta de agregación para encontrar el ciclo de mantenimiento mínimo para cada caso
+            AggregateResult[] results = [SELECT Maintenance_Request__c, MIN(Equipment__r.Maintenance_Cycle__c)cycle FROM Equipment_Maintenance_Item__c WHERE Maintenance_Request__c IN :ValidIds GROUP BY Maintenance_Request__c];
+            // Iteramos por los resultados de la consulta y los añadimos al mapa de ciclos de mantenimiento
+            for (AggregateResult ar : results){ 
+                maintenanceCycles.put((Id) ar.get('Maintenance_Request__c'), (Decimal) ar.get('cycle'));
+            }
+            
+            // Iteramos por los casos cerrados que necesitan mantenimiento y creamos un nuevo caso de mantenimiento para cada uno
+            for(Case cc : closedCasesM.values()){
+                Case nc = new Case (
+                    ParentId = cc.Id,
+                    Status = 'New',
+                    Subject = 'Routine Maintenance',
+                    Type = 'Routine Maintenance',
+                    Vehicle__c = cc.Vehicle__c,
+                    Equipment__c =cc.Equipment__c,
+                    Origin = 'Web',
+                    Date_Reported__c = Date.Today()
+                );
+                
+                // Si se encontró un ciclo de mantenimiento mínimo para este caso, establecemos la fecha de vencimiento del nuevo caso
+                If (maintenanceCycles.containskey(cc.Id)){
+                    nc.Date_Due__c = Date.today().addDays((Integer) maintenanceCycles.get(cc.Id));
+                }
+                
+                // Agregamos el nuevo caso a la lista de nuevos casos de mantenimiento
+                newCases.add(nc);
+            }
+            
+            // Insertamos los nuevos casos de mantenimiento en la base de datos
+            insert newCases;
+            
+            // Creamos una lista vacía para almacenar las órdenes de trabajo clonadas
+            List<Equipment_Maintenance_Item__c> clonedWPs = new List<Equipment_Maintenance_Item__c>();
+            for (Case nc : newCases){
+            // Recorre cada nuevo caso que se ha creado
+            for (Equipment_Maintenance_Item__c wp : closedCasesM.get(nc.ParentId).Equipment_Maintenance_Items__r){
+                // Recorre cada registro de "Equipment Maintenance Items" asociado al caso original
+                Equipment_Maintenance_Item__c wpClone = wp.clone();
+                // Crea un clon del registro de "Equipment Maintenance Items"
+                wpClone.Maintenance_Request__c = nc.Id;
+                // Asigna el nuevo Id del caso clonado a la solicitud de mantenimiento del registro clonado
+                ClonedWPs.add(wpClone);
+                // Agrega el registro clonado a la lista de registros de "Equipment Maintenance Items" clonados
+            }
+            }
+            insert ClonedWPs;
+            // Inserta todos los registros de "Equipment Maintenance Items" clonados en la base de datos
+        }
+    }
+}

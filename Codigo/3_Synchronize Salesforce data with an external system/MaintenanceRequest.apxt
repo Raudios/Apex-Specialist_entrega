@@ -1,0 +1,9 @@
+// Este trigger se dispara antes y después de una actualización en el objeto Case
+trigger MaintenanceRequest on Case (before update, after update) {
+    // Se verifica si la acción que dispara el trigger es una actualización y si ocurre después de la actualización
+    if(Trigger.isUpdate && Trigger.isAfter){
+        // Se llama al método estático updateWorkOrders de la clase MaintenanceRequestHelper
+        // El método recibe los registros nuevos y antiguos de los casos que han sido actualizados
+        MaintenanceRequestHelper.updateWorkOrders(Trigger.New, Trigger.OldMap);
+    }
+}

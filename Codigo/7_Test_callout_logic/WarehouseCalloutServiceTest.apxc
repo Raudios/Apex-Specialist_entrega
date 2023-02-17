@@ -1,0 +1,11 @@
+private class WarehouseCalloutServiceTest {   
+    @isTest  
+    static void testWareHouseCallout(){
+        Test.startTest(); // Inicio del contexto de prueba
+        // Implementación de simulación de llamada mock aquí
+        Test.setMock(HTTPCalloutMock.class, new WarehouseCalloutServiceMock()); // Configuración de la clase de simulación de llamada HTTP
+        WarehouseCalloutService.runWarehouseEquipmentSync(); // Llamada al método de sincronización del equipo de almacén
+        Test.stopTest(); // Finalización del contexto de prueba
+        System.assertEquals(1, [SELECT count() FROM Product2]); // Verificación del resultado esperado de la prueba
+    }     
+}

@@ -1,0 +1,8 @@
+// Define el trigger MaintenanceRequest en el objeto Case que se ejecuta antes y después de la actualización
+trigger MaintenanceRequest on Case (before update, after update) {
+    // Verifica que el trigger se está ejecutando después de una actualización
+    if (Trigger.isUpdate && Trigger.isAfter) {
+        // Llama al método de la clase helper para actualizar las órdenes de trabajo relacionadas con los casos actualizados
+        MaintenanceRequestHelper.updateWorkOrders(Trigger.New, Trigger.OldMap);
+    }
+}

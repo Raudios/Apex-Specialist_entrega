@@ -1,0 +1,55 @@
+public with sharing class WarehouseCalloutService {
+
+    // URL del endpoint del servicio de warehouse
+    private static final String WAREHOUSE_URL = 'https://th-superbadge-apex.herokuapp.com/equipment';
+    
+    //@future(callout=true)
+    // Método que realiza una llamada HTTP GET al servicio de warehouse para sincronizar los equipos en Salesforce
+    public static void runWarehouseEquipmentSync(){
+        
+        // Se crea una instancia de la clase Http para hacer la llamada al servicio
+        Http http = new Http();
+        // Se crea una instancia de la clase HttpRequest
+        HttpRequest request = new HttpRequest();
+        
+        // Se establece la URL del endpoint
+        request.setEndpoint(WAREHOUSE_URL);
+        // Se establece el método HTTP que se utilizará para la llamada (en este caso GET)
+        request.setMethod('GET');
+        // Se hace la llamada HTTP y se guarda la respuesta en la variable 'response'
+        HttpResponse response = http.send(request);
+        
+        // Lista que almacenará los equipos del warehouse que se deben sincronizar con Salesforce
+        List<Product2> warehouseEq = new List<Product2>();
+        
+        // Se verifica que el estado de la respuesta sea 200 (OK)
+        if (response.getStatusCode() == 200){
+            // Se obtiene el cuerpo de la respuesta (que contiene un objeto JSON)
+            List<Object> jsonResponse = (List<Object>)JSON.deserializeUntyped(response.getBody());
+            // Se muestra en la consola el cuerpo de la respuesta
+            System.debug(response.getBody());
+            
+            // Se recorre el objeto JSON y se crean objetos Product2 con los datos de cada equipo
+            for (Object eq : jsonResponse){
+                Map<String,Object> mapJson = (Map<String,Object>)eq;
+                Product2 myEq = new Product2();
+                myEq.Replacement_Part__c = (Boolean) mapJson.get('replacement');
+                myEq.Name = (String) mapJson.get('name');
+                myEq.Maintenance_Cycle__c = (Integer) mapJson.get('maintenanceperiod');
+                myEq.Lifespan_Months__c = (Integer) mapJson.get('lifespan');
+                myEq.Cost__c = (Decimal) mapJson.get('lifespan');
+                myEq.Warehouse_SKU__c = (String) mapJson.get('sku');
+                myEq.Current_Inventory__c = (Double) mapJson.get('quantity');
+                warehouseEq.add(myEq);
+            }
+            
+            // Si se obtuvieron equipos del warehouse, se actualizan o insertan en Salesforce
+            if (warehouseEq.size() > 0){
+                upsert warehouseEq;
+                System.debug('Your equipment was synced with the warehouse one');
+                System.debug(warehouseEq);
+            }
+            
+        }
+    }
+}

@@ -1,0 +1,20 @@
+@isTest
+public class WarehouseSyncScheduleTest {
+   
+    @isTest static void WarehousescheduleTest(){
+        // Definir una cadena de tiempo de programación en formato cron
+        String scheduleTime = '00 00 01 * * ?';
+        Test.startTest();
+        
+        // Establecer una clase de simulación de llamadas HTTP
+        Test.setMock(HttpCalloutMock.class, new WarehouseCalloutServiceMock());
+        
+        // Programar la ejecución de la clase WarehouseSyncSchedule a la hora definida
+        String jobID=System.schedule('Warehouse Time To Schedule to Test', scheduleTime, new WarehouseSyncSchedule());
+        Test.stopTest();
+        
+        // Verificar que el trabajo programado está programado para ejecutarse en el futuro
+        CronTrigger a=[SELECT Id FROM CronTrigger where NextFireTime > today];
+        System.assertEquals(jobID, a.Id,'Schedule ');
+    }
+}
